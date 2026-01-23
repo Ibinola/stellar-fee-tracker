@@ -1,3 +1,3 @@
 fn main() {
-    println!("Hello, world!");
+    println!("🚀 Stellar Fee Tracker starting up...");
 }
