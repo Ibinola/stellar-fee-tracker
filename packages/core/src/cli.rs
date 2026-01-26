@@ -1,3 +1,5 @@
+// CLI module placeholder
+// CLI module placeholder
 use clap::Parser;
 
 /// Stellar Fee Tracker CLI arguments
