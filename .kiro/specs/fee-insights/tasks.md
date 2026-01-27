@@ -97,7 +97,7 @@
     - Create main processing method that coordinates all calculations
     - _Requirements: 1.3, 2.3, 3.5_
 
-  - [ ] 7.2 Add insights querying and data retrieval methods
+  - [x] 7.2 Add insights querying and data retrieval methods
     - Implement methods to get current insights, averages, extremes, trends
     - Add data quality indicators and metadata
     - Create comprehensive insights data structure
@@ -110,13 +110,13 @@
     - _Requirements: 1.3, 2.3, 3.5_
 
 - [ ] 8. Integrate with existing service architecture
-  - [ ] 8.1 Add insights engine to main service
+  - [x] 8.1 Add insights engine to main service
     - Integrate FeeInsightsEngine into main.rs service loop
     - Add insights processing to existing polling cycle
     - Create configuration integration with existing config system
     - _Requirements: 1.3, 2.3, 3.5_
 
-  - [ ] 8.2 Add insights API endpoints
+  - [x] 8.2 Add insights API endpoints
     - Create REST endpoints for querying insights data
     - Add JSON serialization for all insights data structures
     - Implement error handling and response formatting
