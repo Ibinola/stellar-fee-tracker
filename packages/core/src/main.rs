@@ -1,3 +1,7 @@
+// These modules contain scaffolding that will be wired up in subsequent issues.
+// Suppress dead-code warnings until then rather than deleting valid future code.
+#![allow(dead_code)]
+
 mod cli;
 mod config;
 mod error;
@@ -8,14 +12,6 @@ mod scheduler;
 
 use clap::Parser;
 use dotenvy::dotenv;
-use tokio::time::{interval, Duration};
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use axum::{
-    routing::get,
-    Router,
-};
-use tower_http::cors::CorsLayer;
 
 use crate::cli::Cli;
 use crate::config::Config;

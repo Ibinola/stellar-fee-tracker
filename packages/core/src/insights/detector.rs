@@ -1,6 +1,6 @@
 //! Congestion Detection System
 
-use chrono::{DateTime, Utc, Duration};
+use chrono::{Utc, Duration};
 use std::collections::VecDeque;
 
 use crate::insights::{
