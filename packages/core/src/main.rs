@@ -13,15 +13,12 @@ mod scheduler;
 mod store;
 
 use std::sync::Arc;
-use std::time::Duration;
 
-use axum::{
-    http::{HeaderName, HeaderValue, Method},
-    routing::get,
-    Router,
-};
+use axum::{routing::get, Router};
+use axum::http::{HeaderName, Method};
 use clap::Parser;
 use dotenvy::dotenv;
+use std::time::Duration;
 use tokio::sync::RwLock;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
@@ -69,8 +66,8 @@ async fn main() {
         (*horizon_client).clone(),
     ));
 
-    // ---- CORS ----
-    let origins: Vec<HeaderValue> = config
+    // ---- CORS policy ----
+    let origins: Vec<axum::http::HeaderValue> = config
         .allowed_origins
         .iter()
         .map(|o| o.parse().expect("Invalid origin in ALLOWED_ORIGINS"))
@@ -101,14 +98,17 @@ async fn main() {
         .max_age(Duration::from_secs(3600));
 
     // ---- Axum router ----
-    // Both sub-routers must share the same state type (()).
-    // HorizonClient is injected via Extension so we avoid the Router<S>
-    // type mismatch that occurs when merging routers with different state.
+    // fees route gets Arc<HorizonClient> as state (Issue #08)
+    // insights routes get Arc<RwLock<FeeInsightsEngine>> as their own state
+    // Both sub-routers are Router<()> after with_state, so merge works fine
+    let fees_router = Router::new()
+        .route("/fees/current", get(api::fees::current_fees))
+        .with_state(horizon_client.clone());
+
     let app = Router::new()
         .route("/health", get(api::health::health))
-        .route("/fees/current", get(api::fees::current_fees))
+        .merge(fees_router)
         .merge(api::insights::create_insights_router(insights_engine.clone()))
-        .layer(axum::Extension((*horizon_client).clone()))
         .layer(cors);
 
     // ---- TCP listener ----
