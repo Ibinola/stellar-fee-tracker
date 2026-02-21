@@ -2,7 +2,6 @@
 
 use chrono::{DateTime, Utc, Duration};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// A single fee data point from the blockchain
 #[derive(Debug, Clone, Serialize, Deserialize)]
