@@ -9,6 +9,9 @@ pub struct Config {
     pub poll_interval_seconds: u64,
     pub api_port: u16,
     pub allowed_origins: Vec<String>,
+    pub retry_attempts: u32,
+    pub base_retry_delay_ms: u64,
+    pub database_url: String,
 }
 
 #[derive(Debug, Clone)]
@@ -34,11 +37,35 @@ impl Config {
     /// `HORIZON_URL` is optional — when omitted it defaults to the well-known
     /// public Horizon endpoint for the selected `STELLAR_NETWORK`.
     pub fn from_sources(cli: &Cli) -> Result<Self, String> {
+        Self::from_sources_with_env(cli, &std::collections::HashMap::new())
+    }
+
+    /// Like `from_sources` but allows injecting env var overrides — used in tests
+    /// to avoid mutating the real process environment.
+    #[cfg(test)]
+    pub fn from_sources_with_overrides(
+        cli: &Cli,
+        overrides: &std::collections::HashMap<&str, &str>,
+    ) -> Result<Self, String> {
+        Self::from_sources_with_env(cli, &overrides.iter().map(|(k, v)| (*k, *v)).collect())
+    }
+
+    fn from_sources_with_env(
+        cli: &Cli,
+        overrides: &std::collections::HashMap<&str, &str>,
+    ) -> Result<Self, String> {
+        let get = |key: &str| -> Option<String> {
+            overrides
+                .get(key)
+                .map(|v| v.to_string())
+                .or_else(|| env::var(key).ok())
+        };
+
         // -------- Network --------
         let network_raw = cli
             .network
             .clone()
-            .or_else(|| env::var("STELLAR_NETWORK").ok())
+            .or_else(|| get("STELLAR_NETWORK"))
             .ok_or("STELLAR_NETWORK is required")?;
 
         let stellar_network = match network_raw.as_str() {
@@ -48,27 +75,43 @@ impl Config {
         };
 
         // -------- Horizon URL --------
-        // Explicit config takes priority; falls back to network default.
         let horizon_url = cli
             .horizon_url
             .clone()
-            .or_else(|| env::var("HORIZON_URL").ok())
+            .or_else(|| get("HORIZON_URL"))
             .unwrap_or_else(|| stellar_network.default_horizon_url().to_string());
 
         // -------- Poll Interval --------
         let poll_interval_seconds = cli
             .poll_interval
-            .or_else(|| env::var("POLL_INTERVAL_SECONDS").ok()?.parse().ok())
+            .or_else(|| get("POLL_INTERVAL_SECONDS")?.parse().ok())
             .ok_or("POLL_INTERVAL_SECONDS is required and must be a number")?;
 
         // -------- API Port --------
-        let api_port = env::var("API_PORT")
-            .ok()
+        let api_port = get("API_PORT")
             .and_then(|v| v.parse::<u16>().ok())
             .unwrap_or(8080);
 
         // -------- Allowed Origins --------
-        let allowed_origins = parse_allowed_origins(env::var("ALLOWED_ORIGINS").ok());
+        let allowed_origins = get("ALLOWED_ORIGINS")
+            .unwrap_or_else(|| "http://localhost:3000".to_string())
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        // -------- Retry config --------
+        let retry_attempts = get("RETRY_ATTEMPTS")
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(3);
+
+        let base_retry_delay_ms = get("BASE_RETRY_DELAY_MS")
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(1000);
+
+        // -------- Database URL --------
+        let database_url = get("DATABASE_URL")
+            .unwrap_or_else(|| "sqlite://stellar_fees.db".to_string());
 
         Ok(Self {
             stellar_network,
@@ -76,25 +119,29 @@ impl Config {
             poll_interval_seconds,
             api_port,
             allowed_origins,
+            retry_attempts,
+            base_retry_delay_ms,
+            database_url,
         })
     }
-}
-
-/// Parses a comma-separated `ALLOWED_ORIGINS` value, trimming whitespace and
-/// dropping empty segments. Returns `["http://localhost:3000"]` when `None`.
-fn parse_allowed_origins(raw: Option<String>) -> Vec<String> {
-    raw.map(|v| {
-        v.split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect()
-    })
-    .unwrap_or_else(|| vec!["http://localhost:3000".to_string()])
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
+
+    fn make_cli(network: &str, horizon_url: Option<&str>) -> Cli {
+        Cli {
+            network: Some(network.to_string()),
+            horizon_url: horizon_url.map(str::to_string),
+            poll_interval: Some(30),
+        }
+    }
+
+    fn no_env<'a>() -> HashMap<&'a str, &'a str> {
+        HashMap::new()
+    }
 
     // ---- StellarNetwork::default_horizon_url ----
 
@@ -114,35 +161,19 @@ mod tests {
         );
     }
 
-    // ---- Config::from_sources URL resolution ----
-
-    fn make_cli(network: &str, horizon_url: Option<&str>) -> Cli {
-        Cli {
-            network: Some(network.to_string()),
-            horizon_url: horizon_url.map(str::to_string),
-            poll_interval: Some(30),
-        }
-    }
+    // ---- Config::from_sources_with_overrides ----
 
     #[test]
     fn testnet_without_horizon_url_uses_default() {
-        // HORIZON_URL env var must not be set for this test to be meaningful.
-        // We use the CLI-only path (no env fallback) by providing all values via CLI.
         let cli = make_cli("testnet", None);
-        // Temporarily clear env var to avoid interference
-        let _guard = env::var("HORIZON_URL").ok();
-        unsafe { env::remove_var("HORIZON_URL"); }
-
-        let config = Config::from_sources(&cli).unwrap();
+        let config = Config::from_sources_with_overrides(&cli, &no_env()).unwrap();
         assert_eq!(config.horizon_url, "https://horizon-testnet.stellar.org");
     }
 
     #[test]
     fn mainnet_without_horizon_url_uses_default() {
         let cli = make_cli("mainnet", None);
-        unsafe { env::remove_var("HORIZON_URL"); }
-
-        let config = Config::from_sources(&cli).unwrap();
+        let config = Config::from_sources_with_overrides(&cli, &no_env()).unwrap();
         assert_eq!(config.horizon_url, "https://horizon.stellar.org");
     }
 
@@ -150,15 +181,14 @@ mod tests {
     fn explicit_horizon_url_overrides_default() {
         let custom = "https://my-private-horizon.example.com";
         let cli = make_cli("testnet", Some(custom));
-
-        let config = Config::from_sources(&cli).unwrap();
+        let config = Config::from_sources_with_overrides(&cli, &no_env()).unwrap();
         assert_eq!(config.horizon_url, custom);
     }
 
     #[test]
     fn invalid_network_returns_error() {
         let cli = make_cli("devnet", None);
-        let result = Config::from_sources(&cli);
+        let result = Config::from_sources_with_overrides(&cli, &no_env());
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Invalid STELLAR_NETWORK"));
     }
@@ -166,40 +196,40 @@ mod tests {
     #[test]
     fn api_port_defaults_to_8080() {
         let cli = make_cli("testnet", None);
-        unsafe { env::remove_var("API_PORT"); }
-        let config = Config::from_sources(&cli).unwrap();
+        let config = Config::from_sources_with_overrides(&cli, &no_env()).unwrap();
         assert_eq!(config.api_port, 8080);
     }
 
-    // ---- ALLOWED_ORIGINS parsing ----
-    // Tests call parse_allowed_origins directly to avoid env-var race conditions
-    // between parallel test threads.
-
     #[test]
     fn allowed_origins_defaults_to_localhost_3000() {
-        assert_eq!(
-            parse_allowed_origins(None),
-            vec!["http://localhost:3000"],
-        );
+        let cli = make_cli("testnet", None);
+        let config = Config::from_sources_with_overrides(&cli, &no_env()).unwrap();
+        assert_eq!(config.allowed_origins, vec!["http://localhost:3000"]);
     }
 
     #[test]
     fn allowed_origins_parses_comma_separated_list() {
+        let cli = make_cli("testnet", None);
+        let env = HashMap::from([
+            ("ALLOWED_ORIGINS", "http://localhost:3000,https://app.example.com"),
+        ]);
+        let config = Config::from_sources_with_overrides(&cli, &env).unwrap();
         assert_eq!(
-            parse_allowed_origins(Some(
-                "http://localhost:3000,https://app.example.com".to_string()
-            )),
-            vec!["http://localhost:3000", "https://app.example.com"],
+            config.allowed_origins,
+            vec!["http://localhost:3000", "https://app.example.com"]
         );
     }
 
     #[test]
     fn allowed_origins_trims_whitespace() {
+        let cli = make_cli("testnet", None);
+        let env = HashMap::from([
+            ("ALLOWED_ORIGINS", "http://localhost:3000 , https://app.example.com "),
+        ]);
+        let config = Config::from_sources_with_overrides(&cli, &env).unwrap();
         assert_eq!(
-            parse_allowed_origins(Some(
-                "http://localhost:3000 , https://app.example.com , ".to_string()
-            )),
-            vec!["http://localhost:3000", "https://app.example.com"],
+            config.allowed_origins,
+            vec!["http://localhost:3000", "https://app.example.com"]
         );
     }
 }

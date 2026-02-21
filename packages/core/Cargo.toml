@@ -1,27 +1,51 @@
 [package]
-name = "core"
+name = "stellar-fee-tracker"
 version = "0.1.0"
 edition = "2021"
-description = "Stellar Fee Tracker core service"
-license = "MIT"
+
+[[bin]]
+name = "stellar-fee-tracker"
+path = "src/main.rs"
 
 [dependencies]
-dotenvy = "0.15"
-serde = { version = "1.0", features = ["derive"] }
-async-trait = "0.1"
-chrono = { version = "0.4", features = ["serde"] }
-thiserror = "1.0"
-tokio = { version = "1.0", features = ["full"] }
+# Web framework
+axum = { version = "0.7", features = ["json"] }
+tower-http = { version = "0.5", features = ["cors"] }
+tokio = { version = "1", features = ["full"] }
+
+# HTTP client
+reqwest = { version = "0.11", features = ["json"] }
+
+# Serialisation
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+thiserror = "1"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Logging / tracing
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-clap = { version = "4.0", features = ["derive"] }
-reqwest = { version = "0.11", features = ["json"] }
-axum = "0.7"
-tower = "0.4"
-tower-http = { version = "0.5", features = ["cors"] }
-serde_json = "1.0"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Env
+dotenvy = "0.15"
+
+# Random (used for exponential backoff jitter)
+rand = "0.8"
+
+# Database
+sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio-native-tls", "macros"] }
+
+# Async trait support (required for dyn-compatible async traits)
+async-trait = "0.1"
 
 [dev-dependencies]
-proptest = "1.4"
+tokio = { version = "1", features = ["full", "test-util"] }
+proptest = "1"
 tokio-test = "0.4"
-rand = "0.8"
