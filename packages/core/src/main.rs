@@ -5,6 +5,7 @@
 mod api;
 mod cli;
 mod config;
+mod db;
 mod error;
 mod insights;
 mod logging;
@@ -27,7 +28,7 @@ use crate::config::Config;
 use crate::error::AppError;
 use crate::insights::{FeeInsightsEngine, InsightsConfig, HorizonFeeDataProvider};
 use crate::logging::init_logging;
-use crate::scheduler::run_fee_polling;
+use crate::scheduler::run_fee_polling_with_retry;
 use crate::services::horizon::HorizonClient;
 use crate::store::{FeeHistoryStore, DEFAULT_CAPACITY};
 
@@ -51,6 +52,15 @@ async fn main() {
         });
 
     tracing::info!("Configuration loaded: {:?}", config);
+
+    // ---- Database ----
+    let _db_pool = db::create_pool(&config.database_url)
+        .await
+        .unwrap_or_else(|err| {
+            tracing::error!("Failed to initialise database: {}", err);
+            std::process::exit(1);
+        });
+    tracing::info!("Database initialised: {}", config.database_url);
 
     // ---- Shared state ----
     let horizon_client = Arc::new(HorizonClient::new(config.horizon_url.clone()));
@@ -129,11 +139,13 @@ async fn main() {
                 .await
                 .unwrap_or_else(|err| tracing::error!("Server error: {}", err));
         },
-        run_fee_polling(
+        run_fee_polling_with_retry(
             horizon_provider,
             fee_store,
             insights_engine,
             config.poll_interval_seconds,
+            config.retry_attempts,
+            config.base_retry_delay_ms,
         ),
     );
 
