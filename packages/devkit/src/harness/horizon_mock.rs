@@ -4,16 +4,24 @@ pub struct HorizonMock {
     pub scenario: String,
     /// Optional simulated response delay in milliseconds.
     pub delay_ms: Option<u64>,
+    /// Optional path to a scenario JSON file to serve at `GET /fee_stats`.
+    pub scenario_path: Option<std::path::PathBuf>,
 }
 
 impl HorizonMock {
     pub fn new(scenario: impl Into<String>) -> Self {
-        Self { scenario: scenario.into(), delay_ms: None }
+        Self { scenario: scenario.into(), delay_ms: None, scenario_path: None }
     }
 
     /// Sets the simulated network latency delay.
     pub fn with_delay_ms(mut self, ms: u64) -> Self {
         self.delay_ms = Some(ms);
+        self
+    }
+
+    /// Sets a file path to load the fee_stats JSON payload from at runtime.
+    pub fn with_scenario_path(mut self, path: impl Into<std::path::PathBuf>) -> Self {
+        self.scenario_path = Some(path.into());
         self
     }
 
@@ -43,5 +51,12 @@ impl HorizonMock {
     /// Returns the JSON body for `GET /health`.
     pub fn health_payload(&self) -> String {
         format!(r#"{{"status":"ok","scenario":"{}"}}"#, self.scenario)
+    }
+
+    /// Loads and returns the scenario JSON from `scenario_path` to be served at `GET /fee_stats`.
+    /// Returns `None` if no `scenario_path` was configured.
+    pub fn fee_stats_payload(&self) -> Option<std::io::Result<String>> {
+        self.scenario_path.as_deref()
+            .map(crate::harness::scenarios::load_from_file)
     }
 }
