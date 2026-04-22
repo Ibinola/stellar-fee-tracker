@@ -9,11 +9,27 @@ pub struct HorizonMock {
     pub scenario_path: Option<std::path::PathBuf>,
     /// Probability [0.0, 1.0] of returning a 500/503 error response.
     pub error_rate: f64,
+    /// Optional canned JSON response for `GET /fee_stats`. When set, takes
+    /// precedence over `scenario_path` and the convention-based file path.
+    pub fee_stats_response: Option<String>,
 }
 
 impl HorizonMock {
     pub fn new(scenario: impl Into<String>) -> Self {
-        Self { scenario: scenario.into(), delay_ms: None, scenario_path: None, error_rate: 0.0 }
+        Self {
+            scenario: scenario.into(),
+            delay_ms: None,
+            scenario_path: None,
+            error_rate: 0.0,
+            fee_stats_response: None,
+        }
+    }
+
+    /// Configures a canned in-memory JSON response for `GET /fee_stats`,
+    /// bypassing file I/O entirely. Takes highest precedence over file-based loading.
+    pub fn with_fee_stats_response(mut self, response: impl Into<String>) -> Self {
+        self.fee_stats_response = Some(response.into());
+        self
     }
 
     /// Sets the simulated network latency delay.
@@ -69,9 +85,14 @@ impl HorizonMock {
 
     /// Loads and returns the scenario JSON to be served at `GET /fee_stats`.
     ///
-    /// Uses `scenario_path` if explicitly set; otherwise loads from the
-    /// convention-based path `src/harness/scenarios/{scenario}.json`.
+    /// Resolution order (highest precedence first):
+    /// 1. `fee_stats_response` — in-memory canned response (no I/O).
+    /// 2. `scenario_path` — explicit file path.
+    /// 3. Convention-based path `src/harness/scenarios/{scenario}.json`.
     pub fn fee_stats_payload(&self) -> std::io::Result<String> {
+        if let Some(ref canned) = self.fee_stats_response {
+            return Ok(canned.clone());
+        }
         let path = self.scenario_path.clone().unwrap_or_else(|| {
             std::path::PathBuf::from(format!(
                 "src/harness/scenarios/{}.json",
