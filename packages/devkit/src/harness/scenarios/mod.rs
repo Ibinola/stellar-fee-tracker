@@ -20,6 +20,8 @@ impl ScenarioRotator {
         self.index = (self.index + 1) % self.scenarios.len();
         Some(current)
     }
+}
+
 use std::path::Path;
 
 /// Loads a scenario JSON file from the given path and returns its contents.
