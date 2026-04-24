@@ -1,5 +1,7 @@
 //! Pre-built test scenarios for the Stellar fee tracker harness.
 
+use std::path::Path;
+
 /// Cycles through a list of scenario names, returning the next one each call.
 pub struct ScenarioRotator {
     scenarios: Vec<String>,
