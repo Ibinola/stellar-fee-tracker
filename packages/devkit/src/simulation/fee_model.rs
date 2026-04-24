@@ -3,7 +3,8 @@
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 
-/// Configuration for the seeded fee simulation.
+/// Configuration for a fee simulation scenario.
+#[derive(Debug, Clone)]
 pub struct FeeModelConfig {
     /// Base fee in stroops.
     pub base_fee: u64,
@@ -13,6 +14,8 @@ pub struct FeeModelConfig {
     pub spike_multiplier: u64,
     /// Ledger close interval in seconds (used for timestamp spacing).
     pub ledger_interval_secs: u64,
+    /// Number of ledgers to generate in a single `run()` call.
+    pub ledger_count: u64,
     /// Optional RNG seed for reproducibility.
     pub seed: Option<u64>,
 }
@@ -24,17 +27,21 @@ impl Default for FeeModelConfig {
             spike_probability: 0.05,
             spike_multiplier: 10,
             ledger_interval_secs: 5,
+            ledger_count: 100,
             seed: None,
         }
     }
 }
 
 /// A single simulated fee data point.
+#[derive(Debug, Clone)]
 pub struct FeePoint {
     /// Simulated Unix timestamp (seconds).
     pub timestamp: u64,
     /// Fee in stroops for this ledger.
     pub fee: u64,
+    /// Ledger sequence number (1-based within the scenario).
+    pub ledger: u64,
     /// Whether this ledger was a spike.
     pub is_spike: bool,
 }
@@ -67,10 +74,39 @@ impl FeeModel {
             points.push(FeePoint {
                 timestamp: start_timestamp + (i as u64) * self.config.ledger_interval_secs,
                 fee,
+                ledger: i as u64 + 1,
                 is_spike,
             });
         }
         points
+    }
+
+    /// Convenience batch runner: generates `config.ledger_count` points from timestamp 0.
+    /// Useful for benchmarks and snapshot tests.
+    pub fn run(config: &FeeModelConfig) -> Vec<FeePoint> {
+        FeeModel::new(config.clone()).generate(config.ledger_count as usize, 0)
+    }
+
+    /// Run multiple scenarios sequentially and return combined output.
+    pub fn run_scenarios(configs: &[FeeModelConfig]) -> Vec<FeePoint> {
+        let mut all = Vec::new();
+        let mut ledger_offset = 0u64;
+        let mut time_offset = 0u64;
+        for config in configs {
+            let mut model = FeeModel::new(config.clone());
+            let mut points = model.generate(config.ledger_count as usize, time_offset);
+            for p in &mut points {
+                p.ledger += ledger_offset;
+            }
+            let last = points
+                .last()
+                .map(|p| (p.ledger, p.timestamp))
+                .unwrap_or((0, 0));
+            ledger_offset = last.0;
+            time_offset = last.1 + config.ledger_interval_secs;
+            all.extend(points);
+        }
+        all
     }
 }
 
