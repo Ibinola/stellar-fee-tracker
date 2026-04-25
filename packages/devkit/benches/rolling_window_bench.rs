@@ -2,7 +2,7 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use stellar_devkit::analysis::rolling_window::RollingWindow;
 
 fn bench_rolling_window_algorithms(c: &mut Criterion) {
-    let data: Vec<u64> = (1u64..=100_000).collect();
+    let data: Vec<f64> = (1u64..=100_000).map(|v| v as f64).collect();
     let window = 50;
 
     let mut group = c.benchmark_group("rolling_window_100k");
