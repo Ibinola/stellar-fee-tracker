@@ -53,6 +53,7 @@ impl FeeHistoryStore {
 
     /// Return the `n` most recent data points, oldest first.
     /// If fewer than `n` points exist, all points are returned.
+    #[allow(dead_code)]
     pub fn get_last_n(&self, n: usize) -> Vec<FeeDataPoint> {
         let skip = self.data.len().saturating_sub(n);
         self.data.iter().skip(skip).cloned().collect()
@@ -64,11 +65,13 @@ impl FeeHistoryStore {
     }
 
     /// `true` when the store contains no data points.
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
 
     /// Remove all data points from the store.
+    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.data.clear();
     }

@@ -17,6 +17,7 @@ pub enum AppError {
     Config(String),
     Network(String),
     Parse(String),
+    #[allow(dead_code)]
     Unknown(String),
 }
 

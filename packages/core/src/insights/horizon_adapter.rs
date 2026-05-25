@@ -7,6 +7,8 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use std::str::FromStr;
 
+// No direct reqwest import needed — we use the pooled client from HorizonClient.
+
 use crate::insights::{
     error::ProviderError,
     provider::{FeeDataProvider, ProviderMetadata, ProviderResult},
@@ -17,6 +19,7 @@ use crate::services::horizon::HorizonClient;
 /// Adapter that implements FeeDataProvider for HorizonClient
 pub struct HorizonFeeDataProvider {
     client: HorizonClient,
+    #[allow(dead_code)]
     metadata: ProviderMetadata,
 }
 
@@ -54,7 +57,7 @@ impl HorizonFeeDataProvider {
         Self { client, metadata }
     }
 
-    /// Fetch recent transactions from Horizon
+    /// Fetch recent transactions from Horizon using the shared pooled HTTP client.
     async fn fetch_recent_transactions(
         &self,
         limit: u32,
@@ -65,7 +68,13 @@ impl HorizonFeeDataProvider {
             limit
         );
 
-        let response = reqwest::get(&url)
+        // Use the pooled client from HorizonClient instead of spawning ephemeral
+        // reqwest clients, so we get TCP connection reuse across poll ticks.
+        let response = self
+            .client
+            .http_client()
+            .get(&url)
+            .send()
             .await
             .map_err(|e| ProviderError::NetworkError {
                 message: format!("Failed to fetch transactions: {}", e),

@@ -1,5 +1,7 @@
 //! Error types for fee insights operations
 
+#![allow(dead_code)]
+
 use thiserror::Error;
 
 /// Errors that can occur during insights processing

@@ -284,12 +284,8 @@ impl CongestionDetector {
         self.trend_analyzer.recent_spikes.iter().cloned().collect()
     }
 
-    /// Get all historical spikes
-    pub fn get_historical_spikes(&self) -> Vec<FeeSpike> {
-        self.historical_spikes.iter().cloned().collect()
-    }
-
     /// Clear all spike history (useful for testing or reset scenarios)
+    #[allow(dead_code)]
     pub fn clear_history(&mut self) {
         self.trend_analyzer.recent_spikes.clear();
         self.historical_spikes.clear();

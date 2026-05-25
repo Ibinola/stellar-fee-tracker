@@ -2,6 +2,8 @@
 //!
 //! Provides abstraction layer for different fee data sources
 
+#![allow(dead_code)]
+
 use crate::insights::{error::ProviderError, types::FeeDataPoint};
 use async_trait::async_trait;
 

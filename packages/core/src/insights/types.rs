@@ -124,6 +124,7 @@ pub struct DataQuality {
 #[derive(Debug, Clone)]
 pub struct InsightsUpdate {
     pub insights: CurrentInsights,
+    #[allow(dead_code)]
     pub processing_time: Duration,
     pub data_points_processed: usize,
 }

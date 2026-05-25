@@ -30,6 +30,7 @@ impl<T: Clone> ResponseCache<T> {
         self.cached_at = Some(Instant::now());
     }
 
+    #[allow(dead_code)]
     pub fn invalidate(&mut self) {
         self.value = None;
         self.cached_at = None;
