@@ -106,5 +106,20 @@ mod tests {
     fn window_all_keeps_all() {
         let p = pts();
         assert_eq!(Export::filter_window(&p, Window::All).len(), 2);
+    fn sample() -> Vec<FeePoint> {
+        vec![FeePoint { timestamp: 1000, fee: 100, ledger: 1, is_spike: false }]
+    }
+
+    #[test]
+    fn csv_has_header() {
+        let csv = Export::to_csv(&sample());
+        assert!(csv.starts_with("timestamp,fee,ledger,is_spike\n"));
+    }
+
+    #[test]
+    fn json_is_array() {
+        let json = Export::to_json(&sample());
+        assert!(json.starts_with('['));
+        assert!(json.ends_with(']'));
     }
 }
