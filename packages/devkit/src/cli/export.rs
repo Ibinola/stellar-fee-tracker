@@ -1,5 +1,26 @@
 ﻿use crate::simulation::fee_model::FeePoint;
 use std::fmt::Write as FmtWrite;
+use std::path::{Path, PathBuf};
+
+use crate::simulation::fee_model::FeePoint;
+
+/// Arguments for the `export` subcommand.
+pub struct ExportArgs {
+    /// Source SQLite database path.
+    pub db: PathBuf,
+    /// Output file path. Writes to stdout when `None`.
+    pub output: Option<PathBuf>,
+}
+
+impl ExportArgs {
+    /// Run the export, writing CSV to file or stdout.
+    pub fn run(&self, points: &[FeePoint]) {
+        match &self.output {
+            Some(path) => Export::write_csv(points, path).expect("failed to write output"),
+            None => print!("{}", Export::to_csv(points)),
+        }
+    }
+}
 
 /// Time window filter for exports.
 #[derive(Debug, Clone, Copy)]
@@ -35,6 +56,7 @@ impl Window {
 pub struct Export;
 
 impl Export {
+    /// Serialize fee points to CSV.
     /// Filter points by window relative to the latest timestamp.
     pub fn filter_window<'a>(points: &'a [FeePoint], window: Window) -> &'a [FeePoint] {
         match window.cutoff_seconds() {
@@ -58,7 +80,7 @@ impl Export {
     }
 
     /// Write fee points to a CSV file.
-    pub fn write_csv(points: &[FeePoint], path: &std::path::Path) -> std::io::Result<()> {
+    pub fn write_csv(points: &[FeePoint], path: &Path) -> std::io::Result<()> {
         std::fs::write(path, Self::to_csv(points))
     }
 
