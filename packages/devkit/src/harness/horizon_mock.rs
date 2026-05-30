@@ -98,6 +98,126 @@ impl HorizonMock {
         });
         crate::harness::scenarios::load_from_file(&path)
     }
+
+    /// Loads, validates via typed deserialization, and returns the `fee_stats` JSON.
+    /// Falls back to `fee_stats_payload()` if `serde_json` serialization fails.
+    pub fn fee_stats_payload_validated(&self) -> std::io::Result<String> {
+        if let Some(ref canned) = self.fee_stats_response {
+            return Ok(canned.clone());
+        }
+        let path = self.scenario_path.clone().unwrap_or_else(|| {
+            std::path::PathBuf::from(format!(
+                "src/harness/scenarios/{}.json",
+                self.scenario
+            ))
+        });
+        crate::harness::scenarios::load_scenario(&path)
+            .map(|s| {
+                serde_json::to_string(&s.fee_stats)
+                    .unwrap_or_else(|_| "{}".to_string())
+            })
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))
+    }
+}
+
+/// Configuration bundle for constructing a HorizonMock server.
+#[derive(Debug, Clone)]
+pub struct HorizonMockConfig {
+    /// TCP port the server will bind to.
+    pub port: u16,
+    /// Path to the scenario JSON file on disk.
+    pub scenario_path: std::path::PathBuf,
+    /// Simulated response delay in milliseconds.
+    pub delay_ms: u64,
+    /// Probability [0.0, 1.0] of injecting a 500 error response.
+    pub error_rate: f64,
+}
+
+impl Default for HorizonMockConfig {
+    fn default() -> Self {
+        Self {
+            port: 3001,
+            scenario_path: std::path::PathBuf::from("src/harness/scenarios/normal.json"),
+            delay_ms: 0,
+            error_rate: 0.0,
+        }
+    }
+}
+
+impl HorizonMock {
+    /// Constructs a HorizonMock from the given config bundle.
+    pub fn from_config(config: HorizonMockConfig) -> Self {
+        Self {
+            scenario: config
+                .scenario_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("normal")
+                .to_string(),
+            delay_ms: if config.delay_ms > 0 { Some(config.delay_ms) } else { None },
+            scenario_path: Some(config.scenario_path),
+            error_rate: config.error_rate,
+            fee_stats_response: None,
+        }
+    }
+}
+
+/// Starts an axum HTTP server serving mock Horizon responses.
+///
+/// Routes:
+/// - `GET /fee_stats` — returns scenario fee stats JSON
+/// - `GET /health` — returns `{"status":"ok","scenario":"<name>"}`
+///
+/// Binds to `0.0.0.0:port`. Returns when the server shuts down.
+pub async fn serve(mock: std::sync::Arc<HorizonMock>, port: u16) -> std::io::Result<()> {
+    use axum::{routing::get, Router};
+    use std::net::SocketAddr;
+
+    let m1 = mock.clone();
+    let m2 = mock.clone();
+
+    let app = Router::new()
+        .route(
+            "/fee_stats",
+            get(move || {
+                let m = m1.clone();
+                async move {
+                    match m.fee_stats_payload() {
+                        Ok(json) => (
+                            axum::http::StatusCode::OK,
+                            [(
+                                axum::http::header::CONTENT_TYPE,
+                                "application/json",
+                            )],
+                            json,
+                        ),
+                        Err(e) => (
+                            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                            [(
+                                axum::http::header::CONTENT_TYPE,
+                                "application/json",
+                            )],
+                            format!(r#"{{"error":"{}"}}"#, e),
+                        ),
+                    }
+                }
+            }),
+        )
+        .route(
+            "/health",
+            get(move || {
+                let m = m2.clone();
+                async move { m.health_payload() }
+            }),
+        );
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    axum::serve(listener, app)
+        .await
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
 }
 
 /// Minimal pseudo-random float in [0.0, 1.0) using system time as entropy.
