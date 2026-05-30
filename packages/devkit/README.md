@@ -97,6 +97,42 @@ let mock = HorizonMock::new(payload);
 assert!(mock.fee_stats_payload().contains("\"scenario\": \"spike\""));
 ```
 
+## CLI
+
+The devkit ships with a set of subcommands for driving scenarios from the command line.
+
+### Usage
+
+```bash
+devkit <SUBCOMMAND> [OPTIONS]
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|---|---|
+| `replay` | Replay recorded fee scenarios from a SQLite database |
+| `export` | Export fee data to CSV |
+| `benchmark` | Run performance benchmarks against the fee pipeline |
+| `mock` | Serve mock Horizon `/fee_stats` responses |
+| `simulate` | Run a network-load simulation and print results |
+
+### Examples
+
+```bash
+# Replay fee records from a local SQLite file
+devkit replay ./fees.db
+
+# Export fee data to CSV
+devkit export ./fees.db --output fees.csv
+
+# Run benchmarks
+devkit benchmark --samples 1000
+
+# Start the mock server
+devkit mock --port 8080 --scenario spike
+```
+
 ## Adding to Your Crate
 
 ```toml
@@ -126,3 +162,7 @@ HTML reports are saved to `packages/devkit/target/criterion/`.
 ### CI benchmarks
 
 Benchmarks compile and run on every PR touching `packages/devkit/` via the [Devkit Benchmarks](.github/workflows/devkit-bench.yml) workflow. Results are posted to the GitHub Actions step summary.
+```toml
+[dev-dependencies]
+stellar-devkit = { path = "../devkit" }
+```
