@@ -2626,6 +2626,8 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-test",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
